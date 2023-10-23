@@ -41,13 +41,9 @@ app.get("/api/info", (request, response) => {
   );
 });
 app.get("/api/persons/:id", (request, response) => {
-  const id = Number(request.params.id);
-  const person = persons.find((p) => p.id === id);
-  if (person) {
-    response.json(person);
-  } else {
-    response.status(404).end();
-  }
+  Contact.findById(request.params.id).then((contact) => {
+    response.json(contact);
+  });
 });
 app.delete("/api/persons/:id", (request, response) => {
   const id = Number(request.params.id);
@@ -56,19 +52,18 @@ app.delete("/api/persons/:id", (request, response) => {
 });
 app.post("/api/persons", (request, response) => {
   const body = request.body;
-  if (!(body.name || body.number)) {
+  if (body.name === undefined || body.number === undefined) {
     return response.status(400).json({
-      error: "name or missing",
+      error: "Missing name or number",
     });
   }
-
-  const person = {
+  const contact = new Contact({
     name: body.name,
     number: body.number,
-    id: generateId(),
-  };
-  persons = persons.concat(person);
-  response.json(person);
+  });
+  contact.save().then((savedContact) => {
+    response.json(savedContact);
+  });
 });
 
 app.use(unknownEndpoint);
