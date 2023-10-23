@@ -60,11 +60,12 @@ app.delete("/api/persons/:id", (request, response) => {
 });
 app.post("/api/persons", (request, response) => {
   const body = request.body;
-  if (!body.content) {
-    return response.status(404).json({
-      error: "No content found",
+  if (!(body.name || body.number)) {
+    return response.status(400).json({
+      error: "name or missing",
     });
   }
+
   const person = {
     name: body.name,
     number: body.number,
