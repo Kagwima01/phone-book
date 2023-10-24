@@ -1,6 +1,8 @@
 const express = require("express");
+const app = express();
 const morgan = require("morgan");
 require("dotenv").config();
+
 const Contact = require("./models/contact");
 
 const requestLogger = (request, response, next) => {
@@ -11,22 +13,32 @@ const requestLogger = (request, response, next) => {
   next();
 };
 
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message);
+
+  if (error.name === "CastError") {
+    return response.status(400).send({ error: "malformatted id" });
+  }
+
+  next(error);
+};
+
+// this has to be the last loaded middleware.
+
 const unknownEndpoint = (request, response) => {
   response.status(404).send({ error: "unknown endpoint" });
 };
 
 const cors = require("cors");
-const app = express();
-app.use(express.json());
+
 app.use(cors());
+app.use(express.json());
+app.use(requestLogger);
 app.use(express.static("dist"));
 
-let persons = [];
-
-const generateId = () => {
-  const maxId = persons.length > 0 ? Math.max(...persons.map((p) => p.id)) : 0;
-  return maxId + 1;
-};
+app.get("/", (request, response) => {
+  response.send("<h1>Hello World!</h1>");
+});
 
 app.get("/api/persons", (request, response) => {
   Contact.find({}).then((contacts) => {
@@ -35,21 +47,32 @@ app.get("/api/persons", (request, response) => {
 });
 app.get("/api/info", (request, response) => {
   const currentDate = new Date();
-
-  response.send(
-    `<h4>phonebook has info for ${persons.length} people</h4><h5>${currentDate}</h5>`
-  );
-});
-app.get("/api/persons/:id", (request, response) => {
-  Contact.findById(request.params.id).then((contact) => {
-    response.json(contact);
+  Contact.find({}).then((contacts) => {
+    response.send(
+      `<h4>phonebook has info for ${contacts.length} people</h4><h5>${currentDate}</h5>`
+    );
   });
 });
-app.delete("/api/persons/:id", (request, response) => {
-  const id = Number(request.params.id);
-  persons = persons.filter((p) => p.id !== id);
-  response.status(204).end();
+app.get("/api/persons/:id", (request, response) => {
+  Contact.findById(request.params.id)
+    .then((contact) => {
+      if (contact) {
+        response.json(contact);
+      } else {
+        response.status(404).end();
+      }
+    })
+    .catch((error) => next(error));
 });
+
+app.delete("/api/persons/:id", (request, response) => {
+  Contact.findByIdAndDelete(request.params.id)
+    .then((result) => {
+      response.status(204).end();
+    })
+    .catch((error) => next(error));
+});
+
 app.post("/api/persons", (request, response) => {
   const body = request.body;
   if (body.name === undefined || body.number === undefined) {
@@ -66,7 +89,23 @@ app.post("/api/persons", (request, response) => {
   });
 });
 
+app.put("/api/persons/:id", (request, response, next) => {
+  const body = request.body;
+
+  const contact = {
+    name: body.name,
+    number: body.number,
+  };
+
+  Contact.findByIdAndUpdate(request.params.id, contact, { new: true })
+    .then((updatedContact) => {
+      response.json(updatedContact);
+    })
+    .catch((error) => next(error));
+});
+
 app.use(unknownEndpoint);
+app.use(errorHandler);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
